@@ -40,11 +40,16 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-struct PointLight {
+struct Spotlight {
     glm::vec3 position;
+    glm::vec3 direction;
+
     glm::vec3 ambient;
     glm::vec3 diffuse;
     glm::vec3 specular;
+
+    float cutOff;
+    float outerCutOff;
 
     float constant;
     float linear;
@@ -56,9 +61,11 @@ struct ProgramState {
     bool ImGuiEnabled = true;
     Camera camera;
     bool CameraMouseMovementUpdateEnabled = true;
-    PointLight pointLight;
+    glm::vec3 truckPosition = glm::vec3(0.0f);
+    Spotlight leftHeadlight;
+    Spotlight rightHeadlight;
     ProgramState()
-            : camera(glm::vec3(0.0f, 3.0f, 5.0f)) {}
+            : camera(glm::vec3(40.0f, 40.0f, 20.0f)) {}
 
     void SaveToFile(std::string filename);
 
@@ -163,18 +170,41 @@ int main() {
 
     // load models
     // -----------
-    Model ourModel("resources/objects/truck/truck.obj");
-    ourModel.SetShaderTextureNamePrefix("material.");
+    Model truck("resources/objects/truck/truck.obj");
+    Model wall("resources/objects/wall/10061_Wall_SG_V2_Iterations-2.obj");
+    truck.SetShaderTextureNamePrefix("material.");
+    wall.SetShaderTextureNamePrefix("material.");
 
-    PointLight& pointLight = programState->pointLight;
-    pointLight.position = glm::vec3(4.0f, 4.0, 0.0);
-    pointLight.ambient = glm::vec3(0.8, 0.8, 0.8);
-    pointLight.diffuse = glm::vec3(0.6, 0.6, 0.6);
-    pointLight.specular = glm::vec3(1.0, 1.0, 1.0);
 
-    pointLight.constant = 1.0f;
-    pointLight.linear = 0.09f;
-    pointLight.quadratic = 0.032f;
+    Spotlight leftHeadlight, rightHeadlight;
+    leftHeadlight.position = glm::vec3(0);
+    leftHeadlight.direction = glm::vec3(0.0f, 0.0f, -1.0f);
+    leftHeadlight.ambient = glm::vec3(0.5f, 0.5f, 0.5f);
+    leftHeadlight.diffuse = glm::vec3(8.0f, 8.0f, 8.0f);
+    leftHeadlight.specular = glm::vec3(10, 10, 10);
+
+    leftHeadlight.constant = 1.0f;
+    leftHeadlight.linear = 0.09f;
+    leftHeadlight.quadratic = 0.032f;
+
+    leftHeadlight.cutOff = glm::cos(glm::radians(30.0f));
+    leftHeadlight.outerCutOff = glm::cos(glm::radians(60.0f));
+
+
+    rightHeadlight.position = glm::vec3(0);
+    rightHeadlight.direction = glm::vec3(0.0f, 0.0f, -1.0f);
+    rightHeadlight.ambient = glm::vec3(0.5f, 0.5f, 0.5f);
+    rightHeadlight.diffuse = glm::vec3(8.0f, 8.0f, 8.0f);
+    rightHeadlight.specular = glm::vec3(10, 10, 10);
+
+    rightHeadlight.constant = 1.0f;
+    rightHeadlight.linear = 0.09f;
+    rightHeadlight.quadratic = 0.032f;
+
+    rightHeadlight.cutOff = glm::cos(glm::radians(30.0f));
+    rightHeadlight.outerCutOff = glm::cos(glm::radians(60.0f));
+
+
 
 
 
@@ -202,16 +232,7 @@ int main() {
 
         // don't forget to enable shader before setting uniforms
         ourShader.use();
-        pointLight.position = glm::vec3(4.0 * cos(currentFrame), 4.0f, 4.0 * sin(currentFrame));
-        ourShader.setVec3("pointLight.position", pointLight.position);
-        ourShader.setVec3("pointLight.ambient", pointLight.ambient);
-        ourShader.setVec3("pointLight.diffuse", pointLight.diffuse);
-        ourShader.setVec3("pointLight.specular", pointLight.specular);
-        ourShader.setFloat("pointLight.constant", pointLight.constant);
-        ourShader.setFloat("pointLight.linear", pointLight.linear);
-        ourShader.setFloat("pointLight.quadratic", pointLight.quadratic);
-        ourShader.setVec3("viewPosition", programState->camera.Position);
-        ourShader.setFloat("material.shininess", 32.0f);
+
         // view/projection transformations
         glm::mat4 projection = glm::perspective(glm::radians(programState->camera.Zoom),
                                                 (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 100.0f);
@@ -219,14 +240,76 @@ int main() {
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
 
-        // render the loaded model
+        // truck
+        glm::mat4 truckModel = glm::mat4(1.0f);
+
+        // model je blesav pa ga rotiramo da bude lepo orijentisan
+        const float truckRotOffsetX = -M_PI * 0.5f;
+        const float truckRotOffsetZ = M_PI * 0.5f;
+
+        truckModel = glm::translate(truckModel, glm::vec3(0.0f, 0.0f, 0.0f));
+        truckModel = glm::scale(truckModel, glm::vec3(1.0f));
+        truckModel = glm::rotate(truckModel, truckRotOffsetX, glm::vec3(1, 0, 0));
+        truckModel = glm::rotate(truckModel, truckRotOffsetZ, glm::vec3(0, 0, 1));
+        ourShader.setMat4("model", truckModel);
+        truck.Draw(ourShader);
+
+        // lights
+        glm::mat4 headlightModel = glm::mat4(1.0f);
+
+        // ubijemo originalne kamionove rotacije koje cemo ispod primeniti na svetla
+        headlightModel = glm::rotate(headlightModel, -truckRotOffsetZ, glm::vec3(0, 0, 1)); // Undo Z-axis rotation
+        headlightModel = glm::rotate(headlightModel, -truckRotOffsetX, glm::vec3(1, 0, 0));  // Undo X-axis rotation
+
+        // al takodje rotiramo malo dole jer su ovo farovi pa kao gledaju u put
+        headlightModel = glm::rotate(headlightModel, -0.3f, glm::vec3(1, 0, 0)); // Tilt down around X-axis
+
+
+
+        leftHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(-4.0f, 7.0f, -16.0f, 1.0f));
+        rightHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(4.0f, 7.0f, -16.0f, 1.0f));
+
+        //leftHeadlight.position = programState -> camera.Position;
+        //leftHeadlight.direction = programState -> camera.Front;
+
+        std::cout << leftHeadlight.position.x << " " <<leftHeadlight.position.y << " " << leftHeadlight.position.z << std::endl;;
+        std::cout << rightHeadlight.position.x << " " <<rightHeadlight.position.y << " " << rightHeadlight.position.z << std::endl;;
+
+        ourShader.setVec3("leftHeadlight.position", leftHeadlight.position);
+        ourShader.setVec3("leftHeadlight.direction", leftHeadlight.direction);
+        ourShader.setVec3("leftHeadlight.ambient", leftHeadlight.ambient);
+        ourShader.setVec3("leftHeadlight.diffuse", leftHeadlight.diffuse);
+        ourShader.setVec3("leftHeadlight.specular", leftHeadlight.specular);
+        ourShader.setFloat("leftHeadlight.constant", leftHeadlight.constant);
+        ourShader.setFloat("leftHeadlight.linear", leftHeadlight.linear);
+        ourShader.setFloat("leftHeadlight.quadratic", leftHeadlight.quadratic);
+        ourShader.setFloat("leftHeadlight.cutOff", leftHeadlight.cutOff);
+        ourShader.setFloat("leftHeadlight.outerCutOff", leftHeadlight.outerCutOff);
+
+        ourShader.setVec3("rightHeadlight.position", rightHeadlight.position);
+        ourShader.setVec3("rightHeadlight.direction", rightHeadlight.direction);
+        ourShader.setVec3("rightHeadlight.ambient", rightHeadlight.ambient);
+        ourShader.setVec3("rightHeadlight.diffuse", rightHeadlight.diffuse);
+        ourShader.setVec3("rightHeadlight.specular", rightHeadlight.specular);
+        ourShader.setFloat("rightHeadlight.constant", rightHeadlight.constant);
+        ourShader.setFloat("rightHeadlight.linear", rightHeadlight.linear);
+        ourShader.setFloat("rightHeadlight.quadratic", rightHeadlight.quadratic);
+        ourShader.setFloat("rightHeadlight.cutOff", rightHeadlight.cutOff);
+        ourShader.setFloat("rightHeadlight.outerCutOff", rightHeadlight.outerCutOff);
+
+        ourShader.setVec3("viewPosition", programState->camera.Position);
+        ourShader.setFloat("material.shininess", 32.0f);
+
+        glEnable(GL_CULL_FACE);
+
+        // wall
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0)); // translate it down so it's at the center of the scene
-        model = glm::scale(model, glm::vec3(0.1));    // it's a bit too big for our scene, so scale it down
+        model = glm::translate(model, glm::vec3(0.0f, 0.0f, -25.0f));
+        model = glm::scale(model, glm::vec3(0.1));
         model = glm::rotate(model, -3.14f*0.5f, glm::vec3(1, 0, 0));
-        model = glm::rotate(model, 3.14f*0.5f, glm::vec3(0, 0, 1));
+        //model = glm::rotate(model, 3.14f*0.5f, glm::vec3(0, 0, 1));
         ourShader.setMat4("model", model);
-        ourModel.Draw(ourShader);
+        wall.Draw(ourShader);
 
         if (programState->ImGuiEnabled)
             DrawImGui(programState);
@@ -312,9 +395,9 @@ void DrawImGui(ProgramState *programState) {
         ImGui::SliderFloat("Float slider", &f, 0.0, 1.0);
         ImGui::ColorEdit3("Background color", (float *) &programState->clearColor);
 
-        ImGui::DragFloat("pointLight.constant", &programState->pointLight.constant, 0.05, 0.0, 1.0);
-        ImGui::DragFloat("pointLight.linear", &programState->pointLight.linear, 0.05, 0.0, 1.0);
-        ImGui::DragFloat("pointLight.quadratic", &programState->pointLight.quadratic, 0.05, 0.0, 1.0);
+        ImGui::DragFloat("leftHeadlight.constant", &programState->leftHeadlight.constant, 0.05, 0.0, 1.0);
+        ImGui::DragFloat("leftHeadlight.linear", &programState->leftHeadlight.linear, 0.05, 0.0, 1.0);
+        ImGui::DragFloat("leftHeadlight.quadratic", &programState->leftHeadlight.quadratic, 0.05, 0.0, 1.0);
         ImGui::End();
     }
 
