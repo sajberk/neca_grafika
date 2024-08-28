@@ -59,13 +59,20 @@ struct Spotlight {
 struct ProgramState {
     glm::vec3 clearColor = glm::vec3(0.4);
     bool ImGuiEnabled = true;
-    Camera camera;
+    Camera worldCamera;
+    Camera drivingCamera;
     bool CameraMouseMovementUpdateEnabled = true;
+    bool isDrivingMode = true;
     glm::vec3 truckPosition = glm::vec3(0.0f);
+    glm::vec3 truckForward = glm::vec3(0.0f, 0.0f, -1.0f);
+    float currentTruckSpeed = 0.0f;
+    float currentTruckSteer = 0.0f;
     Spotlight leftHeadlight;
     Spotlight rightHeadlight;
     ProgramState()
-            : camera(glm::vec3(40.0f, 40.0f, 20.0f)) {}
+            : worldCamera(glm::vec3(40.0f, 40.0f, 20.0f), glm::vec3(0.0f, 1.0f, 0.0f), -135.0f, -35.0f),
+              drivingCamera(glm::vec3(0.0f, 12.0f, -9.0f)) {}
+
 
     void SaveToFile(std::string filename);
 
@@ -77,14 +84,8 @@ void ProgramState::SaveToFile(std::string filename) {
     out << clearColor.r << '\n'
         << clearColor.g << '\n'
         << clearColor.b << '\n'
-        << ImGuiEnabled << '\n'
-        << camera.Position.x << '\n'
-        << camera.Position.y << '\n'
-        << camera.Position.z << '\n'
-        << camera.Front.x << '\n'
-        << camera.Front.y << '\n'
-        << camera.Front.z << '\n';
-}
+        << ImGuiEnabled << '\n';
+      }
 
 void ProgramState::LoadFromFile(std::string filename) {
     std::ifstream in(filename);
@@ -92,13 +93,7 @@ void ProgramState::LoadFromFile(std::string filename) {
         in >> clearColor.r
            >> clearColor.g
            >> clearColor.b
-           >> ImGuiEnabled
-           >> camera.Position.x
-           >> camera.Position.y
-           >> camera.Position.z
-           >> camera.Front.x
-           >> camera.Front.y
-           >> camera.Front.z;
+           >> ImGuiEnabled;
     }
 }
 
@@ -133,6 +128,7 @@ int main() {
     glfwSetKeyCallback(window, key_callback);
     // tell GLFW to capture our mouse
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSwapInterval(1);
 
     // glad: load all OpenGL function pointers
     // ---------------------------------------
@@ -188,7 +184,7 @@ int main() {
     leftHeadlight.quadratic = 0.032f;
 
     leftHeadlight.cutOff = glm::cos(glm::radians(30.0f));
-    leftHeadlight.outerCutOff = glm::cos(glm::radians(60.0f));
+    leftHeadlight.outerCutOff = glm::cos(glm::radians(45.0f));
 
 
     rightHeadlight.position = glm::vec3(0);
@@ -202,9 +198,10 @@ int main() {
     rightHeadlight.quadratic = 0.032f;
 
     rightHeadlight.cutOff = glm::cos(glm::radians(30.0f));
-    rightHeadlight.outerCutOff = glm::cos(glm::radians(60.0f));
+    rightHeadlight.outerCutOff = glm::cos(glm::radians(45.0f));
 
 
+    // em ?
 
 
 
@@ -232,11 +229,15 @@ int main() {
 
         // don't forget to enable shader before setting uniforms
         ourShader.use();
+        Camera& activeCamera = programState->isDrivingMode ? programState->drivingCamera : programState->worldCamera;
 
         // view/projection transformations
-        glm::mat4 projection = glm::perspective(glm::radians(programState->camera.Zoom),
+        glm::mat4 projection = glm::perspective(glm::radians(activeCamera.Zoom),
                                                 (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 100.0f);
-        glm::mat4 view = programState->camera.GetViewMatrix();
+
+        glm::mat4 view = activeCamera.GetViewMatrix();
+
+
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
 
@@ -247,10 +248,16 @@ int main() {
         const float truckRotOffsetX = -M_PI * 0.5f;
         const float truckRotOffsetZ = M_PI * 0.5f;
 
-        truckModel = glm::translate(truckModel, glm::vec3(0.0f, 0.0f, 0.0f));
+        truckModel = glm::translate(truckModel, programState -> truckPosition);
         truckModel = glm::scale(truckModel, glm::vec3(1.0f));
+
+        truckModel = glm::rotate(truckModel, programState -> currentTruckSteer, glm::vec3(0, 1, 0));
         truckModel = glm::rotate(truckModel, truckRotOffsetX, glm::vec3(1, 0, 0));
         truckModel = glm::rotate(truckModel, truckRotOffsetZ, glm::vec3(0, 0, 1));
+
+        // kamionov forward vector je 1 0 0 iz nekog razloga nemam pojma mnogo su haoticne rotacije i ne sredjuje mi se to
+        programState -> truckForward = glm::normalize(glm::vec3(truckModel * glm::vec4(1.0f, 0.0f, 0.0f, 0.0f)));
+
         ourShader.setMat4("model", truckModel);
         truck.Draw(ourShader);
 
@@ -258,22 +265,27 @@ int main() {
         glm::mat4 headlightModel = glm::mat4(1.0f);
 
         // ubijemo originalne kamionove rotacije koje cemo ispod primeniti na svetla
-        headlightModel = glm::rotate(headlightModel, -truckRotOffsetZ, glm::vec3(0, 0, 1)); // Undo Z-axis rotation
-        headlightModel = glm::rotate(headlightModel, -truckRotOffsetX, glm::vec3(1, 0, 0));  // Undo X-axis rotation
+        headlightModel = glm::rotate(headlightModel, -truckRotOffsetZ, glm::vec3(0, 0, 1));
+        headlightModel = glm::rotate(headlightModel, -truckRotOffsetX, glm::vec3(1, 0, 0));
+
+        // ovo ne treba da bude ovde ali hehe slicno je dosta al mozda ga pomerim posle
+        if (programState -> isDrivingMode) {
+            programState->drivingCamera.Position = glm::vec3(truckModel * headlightModel * glm::vec4(0.0f, 11.0f, -9.0f, 1.0f));
+            //programState->drivingCamera.Front = programState->truckForward;  // odraditi neki lerp da ovo ide polako ali sigurno jaooooo uzasno je
+        }
 
         // al takodje rotiramo malo dole jer su ovo farovi pa kao gledaju u put
-        headlightModel = glm::rotate(headlightModel, -0.3f, glm::vec3(1, 0, 0)); // Tilt down around X-axis
+        headlightModel = glm::rotate(headlightModel, -0.3f, glm::vec3(1, 0, 0));
 
 
-
-        leftHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(-4.0f, 7.0f, -16.0f, 1.0f));
-        rightHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(4.0f, 7.0f, -16.0f, 1.0f));
+        leftHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(-4.0f, 7.0f, -17.0f, 1.0f));
+        rightHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(4.0f, 7.0f, -17.0f, 1.0f));
 
         //leftHeadlight.position = programState -> camera.Position;
         //leftHeadlight.direction = programState -> camera.Front;
 
-        std::cout << leftHeadlight.position.x << " " <<leftHeadlight.position.y << " " << leftHeadlight.position.z << std::endl;;
-        std::cout << rightHeadlight.position.x << " " <<rightHeadlight.position.y << " " << rightHeadlight.position.z << std::endl;;
+        //std::cout << leftHeadlight.position.x << " " <<leftHeadlight.position.y << " " << leftHeadlight.position.z << std::endl;;
+        //std::cout << rightHeadlight.position.x << " " <<rightHeadlight.position.y << " " << rightHeadlight.position.z << std::endl;;
 
         ourShader.setVec3("leftHeadlight.position", leftHeadlight.position);
         ourShader.setVec3("leftHeadlight.direction", leftHeadlight.direction);
@@ -297,7 +309,8 @@ int main() {
         ourShader.setFloat("rightHeadlight.cutOff", rightHeadlight.cutOff);
         ourShader.setFloat("rightHeadlight.outerCutOff", rightHeadlight.outerCutOff);
 
-        ourShader.setVec3("viewPosition", programState->camera.Position);
+        ourShader.setVec3("viewPosition", activeCamera.Position);
+
         ourShader.setFloat("material.shininess", 32.0f);
 
         glEnable(GL_CULL_FACE);
@@ -339,14 +352,46 @@ void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        programState->camera.ProcessKeyboard(FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        programState->camera.ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        programState->camera.ProcessKeyboard(LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        programState->camera.ProcessKeyboard(RIGHT, deltaTime);
+    if (programState -> isDrivingMode) {
+        // constant
+        const float truckMaxSpeed = 60.0f;
+        const float truckAcceleration = 20.0f;
+        const float truckSteerSpeed = 8.0f;
+
+        // brm brm
+        //std::cout<<"Speed " << programState -> currentTruckSpeed <<std::endl;
+
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+            programState -> currentTruckSpeed += truckAcceleration * deltaTime;
+        }
+        else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+            programState -> currentTruckSpeed -= 2.0f * truckAcceleration * deltaTime; // kocnice redovno servisirane
+        }
+        else if (programState -> currentTruckSpeed > 0){
+            programState -> currentTruckSpeed -= 0.5f * truckAcceleration * deltaTime; // uspori ako ga ne diramo
+        }
+        // ne sme brzo u rikverc to niko ne radi
+        programState -> currentTruckSpeed = glm::clamp(programState -> currentTruckSpeed, -truckMaxSpeed/5, truckMaxSpeed);
+
+        // todo: dodati da se kamioncic ne vrti u krug a usput ne pokvariti sve ostalo
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+            programState -> currentTruckSteer += truckSteerSpeed * deltaTime;
+        }
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+            programState -> currentTruckSteer -= truckSteerSpeed * deltaTime;
+        }
+
+        programState -> truckPosition += programState -> currentTruckSpeed * programState -> truckForward * deltaTime;
+    } else {
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            programState->worldCamera.ProcessKeyboard(FORWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            programState->worldCamera.ProcessKeyboard(BACKWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            programState->worldCamera.ProcessKeyboard(LEFT, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            programState->worldCamera.ProcessKeyboard(RIGHT, deltaTime);
+    }
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -372,14 +417,17 @@ void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
     lastX = xpos;
     lastY = ypos;
 
-    if (programState->CameraMouseMovementUpdateEnabled)
-        programState->camera.ProcessMouseMovement(xoffset, yoffset);
+    if (programState->CameraMouseMovementUpdateEnabled) {
+        Camera& activeCamera = programState->isDrivingMode ? programState->drivingCamera : programState->worldCamera;
+        activeCamera.ProcessMouseMovement(xoffset, yoffset);
+    }
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
 // ----------------------------------------------------------------------
 void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
-    programState->camera.ProcessMouseScroll(yoffset);
+    Camera& activeCamera = programState->isDrivingMode ? programState->drivingCamera : programState->worldCamera;
+    activeCamera.ProcessMouseScroll(yoffset);
 }
 
 void DrawImGui(ProgramState *programState) {
@@ -403,7 +451,7 @@ void DrawImGui(ProgramState *programState) {
 
     {
         ImGui::Begin("Camera info");
-        const Camera& c = programState->camera;
+        const Camera& c = programState->isDrivingMode ? programState->drivingCamera : programState->worldCamera;
         ImGui::Text("Camera position: (%f, %f, %f)", c.Position.x, c.Position.y, c.Position.z);
         ImGui::Text("(Yaw, Pitch): (%f, %f)", c.Yaw, c.Pitch);
         ImGui::Text("Camera front: (%f, %f, %f)", c.Front.x, c.Front.y, c.Front.z);
@@ -424,5 +472,9 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         } else {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         }
+    }
+
+    if (key == GLFW_KEY_C && action == GLFW_PRESS) {
+        programState -> isDrivingMode = !(programState -> isDrivingMode);
     }
 }
