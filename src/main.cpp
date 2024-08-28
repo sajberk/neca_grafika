@@ -163,6 +163,7 @@ int main() {
     // build and compile shaders
     // -------------------------
     Shader ourShader("resources/shaders/2.model_lighting.vs", "resources/shaders/2.model_lighting.fs");
+    Shader windshieldShader("resources/shaders/2.model_lighting.vs", "resources/shaders/windshieldShader.fs");
 
     // load models
     // -----------
@@ -241,6 +242,7 @@ int main() {
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
 
+
         // truck
         glm::mat4 truckModel = glm::mat4(1.0f);
 
@@ -261,7 +263,7 @@ int main() {
         ourShader.setMat4("model", truckModel);
         truck.Draw(ourShader);
 
-        // lights
+        // farovi
         glm::mat4 headlightModel = glm::mat4(1.0f);
 
         // ubijemo originalne kamionove rotacije koje cemo ispod primeniti na svetla
@@ -271,7 +273,8 @@ int main() {
         // ovo ne treba da bude ovde ali hehe slicno je dosta al mozda ga pomerim posle
         if (programState -> isDrivingMode) {
             programState->drivingCamera.Position = glm::vec3(truckModel * headlightModel * glm::vec4(0.0f, 11.0f, -9.0f, 1.0f));
-            //programState->drivingCamera.Front = programState->truckForward;  // odraditi neki lerp da ovo ide polako ali sigurno jaooooo uzasno je
+            programState->drivingCamera.Front = glm::normalize(glm::mix(programState->drivingCamera.Front, programState->truckForward, 0.5f));
+            programState->drivingCamera.Up = glm::vec3(0.0f, 1.0f, 0.0f); // ovo pravi neprijatnu roll rotaciju
         }
 
         // al takodje rotiramo malo dole jer su ovo farovi pa kao gledaju u put
@@ -284,7 +287,7 @@ int main() {
         //leftHeadlight.position = programState -> camera.Position;
         //leftHeadlight.direction = programState -> camera.Front;
 
-        //std::cout << leftHeadlight.position.x << " " <<leftHeadlight.position.y << " " << leftHeadlight.position.z << std::endl;;
+        //std::cout << activeCamera.Position.x << " " << activeCamera.Position.y << " " << activeCamera.Position.z << std::endl;;
         //std::cout << rightHeadlight.position.x << " " <<rightHeadlight.position.y << " " << rightHeadlight.position.z << std::endl;;
 
         ourShader.setVec3("leftHeadlight.position", leftHeadlight.position);
@@ -313,6 +316,7 @@ int main() {
 
         ourShader.setFloat("material.shininess", 32.0f);
 
+        // nz gde planiram ovo da stavim ako izbacim zid jaoo
         glEnable(GL_CULL_FACE);
 
         // wall
@@ -320,9 +324,51 @@ int main() {
         model = glm::translate(model, glm::vec3(0.0f, 0.0f, -25.0f));
         model = glm::scale(model, glm::vec3(0.1));
         model = glm::rotate(model, -3.14f*0.5f, glm::vec3(1, 0, 0));
-        //model = glm::rotate(model, 3.14f*0.5f, glm::vec3(0, 0, 1));
+
         ourShader.setMat4("model", model);
         wall.Draw(ourShader);
+
+        glDisable(GL_CULL_FACE);
+
+        // sofersajbna
+        std::vector<glm::vec3> windshieldVertices = {
+                glm::vec3(-3.0f, 9.0f, -13.5f),  // dole levo
+                glm::vec3(3.0f, 9.0f, -13.5f),   // dole desno
+                glm::vec3(3.0f, 13.0f, -11.5f),  // gore desno
+                glm::vec3(-3.0f, 13.0f, -11.5f)  // gore levo
+        };
+
+        unsigned int windshieldVAO, windshieldVBO;
+        glGenVertexArrays(1, &windshieldVAO);
+        glGenBuffers(1, &windshieldVBO);
+        glBindVertexArray(windshieldVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, windshieldVBO);
+        glBufferData(GL_ARRAY_BUFFER, windshieldVertices.size() * sizeof(glm::vec3), &windshieldVertices[0], GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+        glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glm::mat4 windshieldModel = glm::mat4(1.0f);
+        windshieldModel = glm::rotate(windshieldModel, -truckRotOffsetZ, glm::vec3(0, 0, 1));
+        windshieldModel = glm::rotate(windshieldModel, -truckRotOffsetX, glm::vec3(1, 0, 0));
+        windshieldModel =truckModel * windshieldModel;
+
+        windshieldShader.use();
+        windshieldShader.setMat4("projection", projection);
+        windshieldShader.setMat4("view", view);
+        windshieldShader.setMat4("model", windshieldModel);
+        windshieldShader.setVec4("windshieldColor", glm::vec4(0.7f, 0.7f, 0.9f, 0.2f));
+
+        glBindVertexArray(windshieldVAO);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+        glBindVertexArray(0);
+
+        glDisable(GL_BLEND);
+
 
         if (programState->ImGuiEnabled)
             DrawImGui(programState);
@@ -356,7 +402,7 @@ void processInput(GLFWwindow *window) {
         // constant
         const float truckMaxSpeed = 60.0f;
         const float truckAcceleration = 20.0f;
-        const float truckSteerSpeed = 8.0f;
+        const float truckSteerSpeed = 1.0f;
 
         // brm brm
         //std::cout<<"Speed " << programState -> currentTruckSpeed <<std::endl;
@@ -373,12 +419,15 @@ void processInput(GLFWwindow *window) {
         // ne sme brzo u rikverc to niko ne radi
         programState -> currentTruckSpeed = glm::clamp(programState -> currentTruckSpeed, -truckMaxSpeed/5, truckMaxSpeed);
 
-        // todo: dodati da se kamioncic ne vrti u krug a usput ne pokvariti sve ostalo
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-            programState -> currentTruckSteer += truckSteerSpeed * deltaTime;
-        }
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-            programState -> currentTruckSteer -= truckSteerSpeed * deltaTime;
+        if (glm::abs(programState->currentTruckSpeed) > 1.0f) { // simpl fiks da se ne vrti u mestu
+            // sick znaci brzina skretanja * brze skrecemo sto brze idemo * deltatajm * sign brzine da rikverc lepo radi
+            // i svi ovi cheatovi jer me mrzi da kuckam dobar voznja kontroler
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+                programState->currentTruckSteer += truckSteerSpeed * (programState -> currentTruckSpeed / truckMaxSpeed) * deltaTime * glm::sign(programState -> currentTruckSpeed);
+            }
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+                programState->currentTruckSteer -= truckSteerSpeed * (programState -> currentTruckSpeed / truckMaxSpeed) * deltaTime * glm::sign(programState -> currentTruckSpeed);
+            }
         }
 
         programState -> truckPosition += programState -> currentTruckSpeed * programState -> truckForward * deltaTime;
