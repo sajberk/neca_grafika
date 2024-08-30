@@ -56,6 +56,18 @@ struct Spotlight {
     float quadratic;
 };
 
+struct PointLight {
+    glm::vec3 position;
+
+    glm::vec3 ambient;
+    glm::vec3 diffuse;
+    glm::vec3 specular;
+
+    float constant;
+    float linear;
+    float quadratic;
+};
+
 struct ProgramState {
     glm::vec3 clearColor = glm::vec3(0.4);
     bool ImGuiEnabled = true;
@@ -194,15 +206,25 @@ int main() {
     rightHeadlight.diffuse = glm::vec3(8.0f, 8.0f, 8.0f);
     rightHeadlight.specular = glm::vec3(10, 10, 10);
 
-    rightHeadlight.constant = 1.0f;
+    rightHeadlight.constant = 1.00f;
     rightHeadlight.linear = 0.09f;
     rightHeadlight.quadratic = 0.032f;
 
     rightHeadlight.cutOff = glm::cos(glm::radians(30.0f));
     rightHeadlight.outerCutOff = glm::cos(glm::radians(45.0f));
 
+    PointLight tempSvetlo;
+    // poludecu od ovih svetala i sve cu ih promeniti cim skejl daunujem modele
+    tempSvetlo.position = glm::vec3(0.0f, 30.0f, 0.0f);
+    tempSvetlo.ambient = glm::vec3(0.05f, 0.05f, 0.1f);
+    tempSvetlo.diffuse = glm::vec3(0.2f, 0.2f, 0.4f);
+    tempSvetlo.specular = glm::vec3(0.3f, 0.3f, 0.4f);
 
-    // em ?
+    tempSvetlo.constant = 0.10f;
+    tempSvetlo.linear = 0.0045f;
+    tempSvetlo.quadratic = 0.00032f;
+
+
 
 
 
@@ -311,6 +333,15 @@ int main() {
         ourShader.setFloat("rightHeadlight.quadratic", rightHeadlight.quadratic);
         ourShader.setFloat("rightHeadlight.cutOff", rightHeadlight.cutOff);
         ourShader.setFloat("rightHeadlight.outerCutOff", rightHeadlight.outerCutOff);
+
+        // ovo treba i za farove da vratim ovde lmao (sem pozicije i smera)
+        ourShader.setVec3("tempSvetlo.position", tempSvetlo.position);
+        ourShader.setVec3("tempSvetlo.ambient", tempSvetlo.ambient);
+        ourShader.setVec3("tempSvetlo.diffuse", tempSvetlo.diffuse);
+        ourShader.setVec3("tempSvetlo.specular", tempSvetlo.specular);
+        ourShader.setFloat("tempSvetlo.constant", tempSvetlo.constant);
+        ourShader.setFloat("tempSvetlo.linear", tempSvetlo.linear);
+        ourShader.setFloat("tempSvetlo.quadratic", tempSvetlo.quadratic);
 
         ourShader.setVec3("viewPosition", activeCamera.Position);
 
