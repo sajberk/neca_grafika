@@ -227,6 +227,19 @@ int main() {
     tempSvetlo.linear = 0.0045f;
     tempSvetlo.quadratic = 0.00032f;
 
+    // pokemoni
+
+    int pokemonCount = 50;
+    std::vector<glm::mat4> pokemoni;
+    srand(static_cast<unsigned>(time(0)));
+
+    for (int i = 0; i < pokemonCount; i++) {
+        float pokemonSpawnZone = 10.0f;
+        float x = -pokemonSpawnZone + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (2 * pokemonSpawnZone)));
+        float z = -pokemonSpawnZone + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (2 * pokemonSpawnZone)));
+        glm::mat4 pokemon = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, z));
+        pokemoni.push_back(pokemon);
+    }
 
     // draw in wireframe
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -269,6 +282,13 @@ int main() {
         ourShader.setMat4("model", oshawottModel);
         oshawott.Draw(ourShader);
 
+        // wottotachi
+        for (glm::mat4& pokemon : pokemoni) {
+            ourShader.setMat4("model", pokemon);
+            oshawott.Draw(ourShader);
+        }
+
+
         // truck
         glm::mat4 truckModel = glm::mat4(1.0f);
 
@@ -299,16 +319,143 @@ int main() {
         // al takodje rotiramo malo dole jer su ovo farovi pa kao gledaju u put
         headlightModel = glm::rotate(headlightModel, -0.5f, glm::vec3(1, 0, 0));
 
+        // ovo je kao radilo
         leftHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(-5.0f, 7.0f, -15.0f, 1.0f));
         rightHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(5.0f, 7.0f, -15.0f, 1.0f));
 
         //leftHeadlight.position = programState -> camera.Position;
-        //leftHeadlight.direction = programState -> camera.Front;
+        leftHeadlight.direction = programState -> truckForward;
+        rightHeadlight.direction = programState -> truckForward;
+
+        // sad ih i renderujemo
+        float leftHeadlightVertices[] = {
+            // Front face (two triangles)
+            -0.45f, 0.6f,  -1.5f,  // Bottom left
+            -0.25f, 0.6f,  -1.5f,  // Bottom right
+            -0.45f,  0.8f,  -1.45f,  // Top left
+            -0.25f,  0.8f,  -1.45f,  // Top right
+
+            // Back face (two triangles)
+            -0.45f, 0.6f,  -1.4f,  // Bottom left
+            -0.25f, 0.6f,  -1.4f,  // Bottom right
+            -0.45f,  0.8f,  -1.35f,  // Top left
+            -0.25f,  0.8f,  -1.35f,  // Top right
+
+            // Left side face (two triangles)
+            -0.45f, 0.6f,  -1.5f,  // Front bottom left
+            -0.45f, 0.8f,  -1.45f,  // Front top left
+            -0.45f, 0.6f,  -1.4f,  // Back bottom left
+            -0.45f, 0.8f,  -1.35f,  // Back top left
+
+            // Right side face (two triangles)
+            -0.25f, 0.6f,  -1.45f,  // Front bottom right
+            -0.25f, 0.8f,  -1.4f,  // Front top right
+            -0.25f, 0.6f,  -1.35f,  // Back bottom right
+            -0.25f, 0.8f,  -1.3f,  // Back top right
+
+            // Top face (two triangles)
+            -0.45f,  0.8f,  -1.4f,  // Front left
+            -0.25f,  0.8f,  -1.4f,  // Front right
+            -0.45f,  0.8f,  -1.3f,  // Back left
+            -0.25f,  0.8f,  -1.3f,  // Back right
+
+            // Bottom face (two triangles)
+            -0.45f, 0.6f,  -1.5f,  // Front left
+            -0.25f, 0.6f,  -1.5f,  // Front right
+            -0.45f, 0.6f,  -1.4f,  // Back left
+            -0.25f, 0.6f,  -1.4f   // Back right
+        };
+
+        float rightHeadlightVertices[] = {
+            // Front face (two triangles)
+            0.45f, 0.6f,  -1.5f,  // Bottom left
+            0.25f, 0.6f,  -1.5f,  // Bottom right
+            0.45f,  0.8f,  -1.45f,  // Top left
+            0.25f,  0.8f,  -1.45f,  // Top right
+
+            // Back face (two triangles)
+            0.45f, 0.6f,  -1.4f,  // Bottom left
+            0.25f, 0.6f,  -1.4f,  // Bottom right
+            0.45f,  0.8f,  -1.35f,  // Top left
+            0.25f,  0.8f,  -1.35f,  // Top right
+
+            // Left side face (two triangles)
+            0.45f, 0.6f,  -1.5f,  // Front bottom left
+            0.45f, 0.8f,  -1.45f,  // Front top left
+            0.45f, 0.6f,  -1.4f,  // Back bottom left
+            0.45f, 0.8f,  -1.35f,  // Back top left
+
+            // Right side face (two triangles)
+            0.25f, 0.6f,  -1.45f,  // Front bottom right
+            0.25f, 0.8f,  -1.4f,  // Front top right
+            0.25f, 0.6f,  -1.35f,  // Back bottom right
+            0.25f, 0.8f,  -1.3f,  // Back top right
+
+            // Top face (two triangles)
+            0.45f,  0.8f,  -1.4f,  // Front left
+            0.25f,  0.8f,  -1.4f,  // Front right
+            0.45f,  0.8f,  -1.3f,  // Back left
+            0.25f,  0.8f,  -1.3f,  // Back right
+
+            // Bottom face (two triangles)
+            0.45f, 0.6f,  -1.5f,  // Front left
+            0.25f, 0.6f,  -1.5f,  // Front right
+            0.45f, 0.6f,  -1.4f,  // Back left
+            0.25f, 0.6f,  -1.4f   // Back right
+        };
+
+        glm::mat4 headlightPhysical = glm::mat4(1.0f);
+        headlightPhysical = glm::rotate(headlightPhysical, -truckRotOffsetZ, glm::vec3(0, 0, 1));
+        headlightPhysical = glm::rotate(headlightPhysical, -truckRotOffsetX, glm::vec3(1, 0, 0));
+        headlightPhysical = glm::scale(headlightPhysical, glm::vec3(10.0f));
+        headlightPhysical = truckModel * headlightPhysical;
+//        leftHeadlightPhysical = glm::translate(leftHeadlightPhysical, glm::vec3(-5.0f, 7.0f, -15.0f));
+  //      leftHeadlightPhysical = glm::rotate(leftHeadlightPhysical, glm::radians(leftHeadlight.direction.x), glm::vec3(1.0f, 0.0f, 0.0f));
+    //    leftHeadlightPhysical = glm::rotate(leftHeadlightPhysical, glm::radians(leftHeadlight.direction.y), glm::vec3(0.0f, 1.0f, 0.0f));
+      //  leftHeadlightPhysical = glm::rotate(leftHeadlightPhysical, glm::radians(leftHeadlight.direction.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+
+        windshieldShader.use();
+        windshieldShader.setMat4("projection", projection);
+        windshieldShader.setMat4("view", view);
+        windshieldShader.setMat4("model", headlightPhysical);
+        windshieldShader.setVec4("windshieldColor", glm::vec4(5.0f));
+
+        unsigned int VAO, VBO;
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(leftHeadlightVertices), leftHeadlightVertices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+
+        glBindVertexArray(0);
+
+        glBindVertexArray(VAO);
+
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);   // Front face
+        glDrawArrays(GL_TRIANGLE_STRIP, 4, 4);   // Back face
+        glDrawArrays(GL_TRIANGLE_STRIP, 8, 4);   // Left side
+        glDrawArrays(GL_TRIANGLE_STRIP, 12, 4);  // Right side
+        glDrawArrays(GL_TRIANGLE_STRIP, 16, 4);  // Top face
+        glDrawArrays(GL_TRIANGLE_STRIP, 20, 4);  // Bottom face
+
+        glBufferData(GL_ARRAY_BUFFER, sizeof(rightHeadlightVertices), rightHeadlightVertices, GL_STATIC_DRAW);
+
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);   // Front face
+        glDrawArrays(GL_TRIANGLE_STRIP, 4, 4);   // Back face
+        glDrawArrays(GL_TRIANGLE_STRIP, 8, 4);   // Left side
+        glDrawArrays(GL_TRIANGLE_STRIP, 12, 4);  // Right side
+        glDrawArrays(GL_TRIANGLE_STRIP, 16, 4);  // Top face
+        glDrawArrays(GL_TRIANGLE_STRIP, 20, 4);  // Bottom face
 
         //std::cout << leftHeadlight.position.x << " " << leftHeadlight.position.y << " " << leftHeadlight.position.z << std::endl;;
         //std::cout << rightHeadlight.position.x << " " <<rightHeadlight.position.y << " " << rightHeadlight.position.z << std::endl<<std::endl;;
-
-        
+        ourShader.use();
         ourShader.setVec3("leftHeadlight.position", leftHeadlight.position);
         ourShader.setVec3("leftHeadlight.direction", leftHeadlight.direction);
         ourShader.setVec3("leftHeadlight.ambient", leftHeadlight.ambient);
@@ -386,7 +533,7 @@ int main() {
         windshieldModel = glm::scale(windshieldModel, glm::vec3(10.0f));
         windshieldModel = truckModel * windshieldModel;
 
-        // cam
+        // cam // boze nemam pojma zasto je ovo na ovom mestu al plasim se da pomeram bilo sta vise tkd todo:
         if (programState -> isDrivingMode)  {
             glm::mat4 steeringRotation = glm::rotate(glm::mat4(1.0f), programState->currentTruckSteer, glm::vec3(0, 1, 0));
             glm::vec3 targetPosition = programState->truckPosition + glm::vec3(steeringRotation * glm::vec4(0.0f, 1.1f, -0.8f, 1.0f));
@@ -464,13 +611,11 @@ void processInput(GLFWwindow *window) {
         programState -> currentTruckSpeed = glm::clamp(programState -> currentTruckSpeed, -truckMaxSpeed/5, truckMaxSpeed);
 
         if (glm::abs(programState->currentTruckSpeed) > 0.1f) { // simpl fiks da se ne vrti u mestu
-            // sick znaci brzina skretanja * brze skrecemo sto brze idemo * deltatajm * sign brzine da rikverc lepo radi
-            // i svi ovi cheatovi jer me mrzi da kuckam dobar voznja kontroler
             if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-                programState->currentTruckSteer += truckSteerSpeed * (programState -> currentTruckSpeed / truckMaxSpeed) * deltaTime * glm::sign(programState -> currentTruckSpeed);
+                programState->currentTruckSteer += truckSteerSpeed * (programState -> currentTruckSpeed / truckMaxSpeed) * deltaTime;
             }
             if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-                programState->currentTruckSteer -= truckSteerSpeed * (programState -> currentTruckSpeed / truckMaxSpeed) * deltaTime * glm::sign(programState -> currentTruckSpeed);
+                programState->currentTruckSteer -= truckSteerSpeed * (programState -> currentTruckSpeed / truckMaxSpeed) * deltaTime;
             }
 
         }
