@@ -82,8 +82,8 @@ struct ProgramState {
     Spotlight leftHeadlight;
     Spotlight rightHeadlight;
     ProgramState()
-            : worldCamera(glm::vec3(40.0f, 40.0f, 20.0f), glm::vec3(0.0f, 1.0f, 0.0f), -135.0f, -35.0f),
-              drivingCamera(glm::vec3(0.0f, 12.0f, -9.0f)) {}
+            : worldCamera(glm::vec3(4.0f, 4.0f, 2.0f), glm::vec3(0.0f, 1.0f, 0.0f), -135.0f, -35.0f),
+              drivingCamera(glm::vec3(0.0f, 1.1f, -0.8f), glm::vec3(0.0f, 1.0f, 0.0f), 0.0f, 0.0f) {}
 
 
     void SaveToFile(std::string filename);
@@ -178,54 +178,54 @@ int main() {
     Shader windshieldShader("resources/shaders/2.model_lighting.vs", "resources/shaders/windshieldShader.fs");
 
     // load models
-    // -----------
+    // ---------
     Model truck("resources/objects/truck/truck.obj");
-    Model wall("resources/objects/wall/10061_Wall_SG_V2_Iterations-2.obj");
     truck.SetShaderTextureNamePrefix("material.");
+    Model wall("resources/objects/wall/10061_Wall_SG_V2_Iterations-2.obj");
     wall.SetShaderTextureNamePrefix("material.");
+    Model oshawott("resources/objects/oshawott/model.obj");
+    oshawott.SetShaderTextureNamePrefix("material.");
 
 
     Spotlight leftHeadlight, rightHeadlight;
     leftHeadlight.position = glm::vec3(0);
     leftHeadlight.direction = glm::vec3(0.0f, 0.0f, -1.0f);
-    leftHeadlight.ambient = glm::vec3(0.5f, 0.5f, 0.5f);
-    leftHeadlight.diffuse = glm::vec3(8.0f, 8.0f, 8.0f);
-    leftHeadlight.specular = glm::vec3(10, 10, 10);
+
+    leftHeadlight.ambient = glm::vec3(0.05f);
+    leftHeadlight.diffuse = glm::vec3(1.2f);
+    leftHeadlight.specular = glm::vec3(2.0f);
 
     leftHeadlight.constant = 1.0f;
     leftHeadlight.linear = 0.09f;
     leftHeadlight.quadratic = 0.032f;
 
-    leftHeadlight.cutOff = glm::cos(glm::radians(30.0f));
-    leftHeadlight.outerCutOff = glm::cos(glm::radians(45.0f));
-
+    leftHeadlight.cutOff = glm::cos(glm::radians(25.0f));
+    leftHeadlight.outerCutOff = glm::cos(glm::radians(40.0f));
 
     rightHeadlight.position = glm::vec3(0);
     rightHeadlight.direction = glm::vec3(0.0f, 0.0f, -1.0f);
-    rightHeadlight.ambient = glm::vec3(0.5f, 0.5f, 0.5f);
-    rightHeadlight.diffuse = glm::vec3(8.0f, 8.0f, 8.0f);
-    rightHeadlight.specular = glm::vec3(10, 10, 10);
+
+    rightHeadlight.ambient = glm::vec3(0.05f);
+    rightHeadlight.diffuse = glm::vec3(1.2f);
+    rightHeadlight.specular = glm::vec3(2.0f);
 
     rightHeadlight.constant = 1.00f;
     rightHeadlight.linear = 0.09f;
     rightHeadlight.quadratic = 0.032f;
 
-    rightHeadlight.cutOff = glm::cos(glm::radians(30.0f));
-    rightHeadlight.outerCutOff = glm::cos(glm::radians(45.0f));
+    rightHeadlight.cutOff = glm::cos(glm::radians(25.0f));
+    rightHeadlight.outerCutOff = glm::cos(glm::radians(40.0f));
 
     PointLight tempSvetlo;
     // poludecu od ovih svetala i sve cu ih promeniti cim skejl daunujem modele
-    tempSvetlo.position = glm::vec3(0.0f, 30.0f, 0.0f);
-    tempSvetlo.ambient = glm::vec3(0.05f, 0.05f, 0.1f);
-    tempSvetlo.diffuse = glm::vec3(0.2f, 0.2f, 0.4f);
-    tempSvetlo.specular = glm::vec3(0.3f, 0.3f, 0.4f);
+    tempSvetlo.position = glm::vec3(0.0f, 10.0f, 0.0f);
+    tempSvetlo.ambient = glm::vec3(0.01f);
+    tempSvetlo.diffuse = glm::vec3(0.05f);
+    tempSvetlo.specular = glm::vec3(0.1f);
 
-    tempSvetlo.constant = 0.10f;
+    tempSvetlo.constant = 0.1f;
     tempSvetlo.linear = 0.0045f;
     tempSvetlo.quadratic = 0.00032f;
-
-
-
 
 
     // draw in wireframe
@@ -256,7 +256,7 @@ int main() {
 
         // view/projection transformations
         glm::mat4 projection = glm::perspective(glm::radians(activeCamera.Zoom),
-                                                (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 100.0f);
+                                                (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.2f, 100.0f);
 
         glm::mat4 view = activeCamera.GetViewMatrix();
 
@@ -264,6 +264,10 @@ int main() {
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
 
+        // wott
+        glm::mat4 oshawottModel = glm::mat4(1.0f);
+        ourShader.setMat4("model", oshawottModel);
+        oshawott.Draw(ourShader);
 
         // truck
         glm::mat4 truckModel = glm::mat4(1.0f);
@@ -273,7 +277,7 @@ int main() {
         const float truckRotOffsetZ = M_PI * 0.5f;
 
         truckModel = glm::translate(truckModel, programState -> truckPosition);
-        truckModel = glm::scale(truckModel, glm::vec3(1.0f));
+        truckModel = glm::scale(truckModel, glm::vec3(0.1f));
 
         truckModel = glm::rotate(truckModel, programState -> currentTruckSteer, glm::vec3(0, 1, 0));
         truckModel = glm::rotate(truckModel, truckRotOffsetX, glm::vec3(1, 0, 0));
@@ -292,26 +296,19 @@ int main() {
         headlightModel = glm::rotate(headlightModel, -truckRotOffsetZ, glm::vec3(0, 0, 1));
         headlightModel = glm::rotate(headlightModel, -truckRotOffsetX, glm::vec3(1, 0, 0));
 
-        // ovo ne treba da bude ovde ali hehe slicno je dosta al mozda ga pomerim posle
-        if (programState -> isDrivingMode) {
-            programState->drivingCamera.Position = glm::vec3(truckModel * headlightModel * glm::vec4(0.0f, 11.0f, -9.0f, 1.0f));
-            programState->drivingCamera.Front = glm::normalize(glm::mix(programState->drivingCamera.Front, programState->truckForward, 0.5f));
-            programState->drivingCamera.Up = glm::vec3(0.0f, 1.0f, 0.0f); // ovo pravi neprijatnu roll rotaciju
-        }
-
         // al takodje rotiramo malo dole jer su ovo farovi pa kao gledaju u put
-        headlightModel = glm::rotate(headlightModel, -0.3f, glm::vec3(1, 0, 0));
+        headlightModel = glm::rotate(headlightModel, -0.5f, glm::vec3(1, 0, 0));
 
-
-        leftHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(-4.0f, 7.0f, -17.0f, 1.0f));
-        rightHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(4.0f, 7.0f, -17.0f, 1.0f));
+        leftHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(-5.0f, 7.0f, -15.0f, 1.0f));
+        rightHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(5.0f, 7.0f, -15.0f, 1.0f));
 
         //leftHeadlight.position = programState -> camera.Position;
         //leftHeadlight.direction = programState -> camera.Front;
 
-        //std::cout << activeCamera.Position.x << " " << activeCamera.Position.y << " " << activeCamera.Position.z << std::endl;;
-        //std::cout << rightHeadlight.position.x << " " <<rightHeadlight.position.y << " " << rightHeadlight.position.z << std::endl;;
+        //std::cout << leftHeadlight.position.x << " " << leftHeadlight.position.y << " " << leftHeadlight.position.z << std::endl;;
+        //std::cout << rightHeadlight.position.x << " " <<rightHeadlight.position.y << " " << rightHeadlight.position.z << std::endl<<std::endl;;
 
+        
         ourShader.setVec3("leftHeadlight.position", leftHeadlight.position);
         ourShader.setVec3("leftHeadlight.direction", leftHeadlight.direction);
         ourShader.setVec3("leftHeadlight.ambient", leftHeadlight.ambient);
@@ -352,8 +349,8 @@ int main() {
 
         // wall
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, -25.0f));
-        model = glm::scale(model, glm::vec3(0.1));
+        model = glm::translate(model, glm::vec3(0.0f, 0.0f, -2.5f));
+        model = glm::scale(model, glm::vec3(0.01));
         model = glm::rotate(model, -3.14f*0.5f, glm::vec3(1, 0, 0));
 
         ourShader.setMat4("model", model);
@@ -363,10 +360,10 @@ int main() {
 
         // sofersajbna
         std::vector<glm::vec3> windshieldVertices = {
-                glm::vec3(-3.0f, 9.0f, -13.5f),  // dole levo
-                glm::vec3(3.0f, 9.0f, -13.5f),   // dole desno
-                glm::vec3(3.0f, 13.0f, -11.5f),  // gore desno
-                glm::vec3(-3.0f, 13.0f, -11.5f)  // gore levo
+                glm::vec3(-0.35f, 0.9f, -1.35f),  // dole levo
+                glm::vec3(0.3f, 0.9f, -1.35f),   // dole desno
+                glm::vec3(0.3f, 1.35f, -1.2f),  // gore desno
+                glm::vec3(-0.35f, 1.35f, -1.2f)  // gore levo
         };
 
         unsigned int windshieldVAO, windshieldVBO;
@@ -386,7 +383,18 @@ int main() {
         glm::mat4 windshieldModel = glm::mat4(1.0f);
         windshieldModel = glm::rotate(windshieldModel, -truckRotOffsetZ, glm::vec3(0, 0, 1));
         windshieldModel = glm::rotate(windshieldModel, -truckRotOffsetX, glm::vec3(1, 0, 0));
-        windshieldModel =truckModel * windshieldModel;
+        windshieldModel = glm::scale(windshieldModel, glm::vec3(10.0f));
+        windshieldModel = truckModel * windshieldModel;
+
+        // cam
+        if (programState -> isDrivingMode)  {
+            glm::mat4 steeringRotation = glm::rotate(glm::mat4(1.0f), programState->currentTruckSteer, glm::vec3(0, 1, 0));
+            glm::vec3 targetPosition = programState->truckPosition + glm::vec3(steeringRotation * glm::vec4(0.0f, 1.1f, -0.8f, 1.0f));
+
+            programState->drivingCamera.Position = glm::mix(programState->drivingCamera.Position, targetPosition, 0.3f);
+            programState->drivingCamera.Front = glm::normalize(programState->truckForward);
+            programState->drivingCamera.Up = glm::vec3(0, 1, 0);
+        }
 
         windshieldShader.use();
         windshieldShader.setMat4("projection", projection);
@@ -431,8 +439,8 @@ void processInput(GLFWwindow *window) {
 
     if (programState -> isDrivingMode) {
         // constant
-        const float truckMaxSpeed = 60.0f;
-        const float truckAcceleration = 20.0f;
+        const float truckMaxSpeed = 6.0f;
+        const float truckAcceleration = 2.0f;
         const float truckSteerSpeed = 1.0f;
 
         // brm brm
@@ -442,15 +450,20 @@ void processInput(GLFWwindow *window) {
             programState -> currentTruckSpeed += truckAcceleration * deltaTime;
         }
         else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-            programState -> currentTruckSpeed -= 2.0f * truckAcceleration * deltaTime; // kocnice redovno servisirane
+            if (programState -> currentTruckSpeed > 0) {
+                programState -> currentTruckSpeed -= 3.0f * truckAcceleration * deltaTime; // kocnice redovno servisirane
+            }
+            else {
+                programState -> currentTruckSpeed -= truckAcceleration * deltaTime;
+            }
         }
-        else if (programState -> currentTruckSpeed > 0){
-            programState -> currentTruckSpeed -= 0.5f * truckAcceleration * deltaTime; // uspori ako ga ne diramo
+        else if (programState -> currentTruckSpeed > 0) {
+            programState -> currentTruckSpeed -= truckAcceleration * deltaTime; // uspori ako ga ne diramo
         }
         // ne sme brzo u rikverc to niko ne radi
         programState -> currentTruckSpeed = glm::clamp(programState -> currentTruckSpeed, -truckMaxSpeed/5, truckMaxSpeed);
 
-        if (glm::abs(programState->currentTruckSpeed) > 1.0f) { // simpl fiks da se ne vrti u mestu
+        if (glm::abs(programState->currentTruckSpeed) > 0.1f) { // simpl fiks da se ne vrti u mestu
             // sick znaci brzina skretanja * brze skrecemo sto brze idemo * deltatajm * sign brzine da rikverc lepo radi
             // i svi ovi cheatovi jer me mrzi da kuckam dobar voznja kontroler
             if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
@@ -459,9 +472,12 @@ void processInput(GLFWwindow *window) {
             if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
                 programState->currentTruckSteer -= truckSteerSpeed * (programState -> currentTruckSpeed / truckMaxSpeed) * deltaTime * glm::sign(programState -> currentTruckSpeed);
             }
-        }
 
-        programState -> truckPosition += programState -> currentTruckSpeed * programState -> truckForward * deltaTime;
+        }
+        glm::vec3 truckMovement = programState -> currentTruckSpeed * programState -> truckForward * deltaTime;
+        programState -> truckPosition += truckMovement;
+        programState -> drivingCamera.Position += truckMovement;
+        //programState -> drivingCamera.Front = programState -> truckForward;
     } else {
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
             programState->worldCamera.ProcessKeyboard(FORWARD, deltaTime);
