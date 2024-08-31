@@ -160,7 +160,8 @@ int main() {
     Shader ourShader("resources/shaders/2.model_lighting.vs", "resources/shaders/2.model_lighting.fs");
     Shader windshieldShader("resources/shaders/2.model_lighting.vs", "resources/shaders/windshieldShader.fs");
     Shader hdrShader("resources/shaders/hdrShader.vs", "resources/shaders/hdrShader.fs");
-
+    Shader blurShader("resources/shaders/hdrShader.vs", "resources/shaders/blurShader.fs");
+    Shader bloomFinalShader("resources/shaders/hdrShader.vs", "resources/shaders/bloomFinalShader.fs");
     // load models
     // ---------
     Model truck("resources/objects/truck/truck.obj");
@@ -174,36 +175,55 @@ int main() {
     // -----------
     unsigned int hdrFBO;
     glGenFramebuffers(1, &hdrFBO);
-    // create floating point color buffer
+    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+
+    // Create two color buffers (one for normal rendering, other for bright colors)
     unsigned int colorBuffers[2];
     glGenTextures(2, colorBuffers);
-    for (unsigned int i = 0; i < 2; i++)
-    {
+    for (unsigned int i = 0; i < 2; i++) {
         glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);  // we clamp to the edge as the blur filter would otherwise sample repeated texture values!
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        // attach texture to framebuffer
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorBuffers[i], 0);
     }
-    // create depth buffer (renderbuffer)
+
+    // Create and attach a renderbuffer object for depth and stencil attachment (we won't be sampling these)
     unsigned int rboDepth;
     glGenRenderbuffers(1, &rboDepth);
     glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT);
-    // attach buffers
-    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorBuffers[0], 0);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
-    // tell OpenGL which color attachments we'll use (of this framebuffer) for rendering
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, SCR_WIDTH, SCR_HEIGHT);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+
+    // Tell OpenGL which color attachments we'll use (of this framebuffer) for rendering
     unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
     glDrawBuffers(2, attachments);
     // finally check if framebuffer is complete
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         std::cout << "Framebuffer not complete!" << std::endl;
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // ping-pong-framebuffer for blurring
+    unsigned int pingpongFBO[2];
+    unsigned int pingpongColorbuffers[2];
+    glGenFramebuffers(2, pingpongFBO);
+    glGenTextures(2, pingpongColorbuffers);
+    for (unsigned int i = 0; i < 2; i++)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
+        glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // we clamp to the edge as the blur filter would otherwise sample repeated texture values!
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColorbuffers[i], 0);
+        // also check if framebuffers are complete (no need for depth buffer)
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+            std::cout << "Framebuffer not complete!" << std::endl;
+    }
 
 
     // lighting info
@@ -252,6 +272,11 @@ int main() {
     // --------------------
     hdrShader.use();
     hdrShader.setInt("hdrBuffer", 0);
+    blurShader.use();
+    blurShader.setInt("image", 0);
+    bloomFinalShader.use();
+    bloomFinalShader.setInt("scene", 0);
+    bloomFinalShader.setInt("bloomBlur", 1);
 
     // pokemoni
     // --------
@@ -579,16 +604,37 @@ int main() {
         glDisable(GL_BLEND);
 
         // tone mapping vreme
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[0]);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        hdrShader.use();
+        ourShader.use();
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, colorBuffers[0]);
-        hdrShader.setInt("hdr", hdr);
-        hdrShader.setFloat("exposure", exposure);
+        glBindTexture(GL_TEXTURE_2D, colorBuffers[1]);
         renderQuad();
 
-        std::cout << "hdr: " << (hdr ? "on" : "off") << "| exposure: " << exposure << std::endl;
+        bool horizontal = true, first_iteration = true;
+        unsigned int amount = 10;
+        blurShader.use();
+        for (unsigned int i = 0; i < amount; i++)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
+            blurShader.setBool("horizontal", horizontal);
+            glBindTexture(GL_TEXTURE_2D, first_iteration ? colorBuffers[1] : pingpongColorbuffers[!horizontal]);
+            renderQuad();
+            horizontal = !horizontal;
+            if (first_iteration)
+                first_iteration = false;
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        bloomFinalShader.use();
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, colorBuffers[0]);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[!horizontal]);
+        bloomFinalShader.setBool("bloom", bloom);
+        bloomFinalShader.setFloat("exposure", exposure);
+        renderQuad();
 
         if (programState->ImGuiEnabled)
             DrawImGui(programState);
@@ -696,14 +742,14 @@ void processInput(GLFWwindow *window) {
             programState->worldCamera.ProcessKeyboard(RIGHT, deltaTime);
     }
 
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !hdrKeyPressed)
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !bloomKeyPressed)
     {
-        hdr = !hdr;
-        hdrKeyPressed = true;
+        bloom = !bloom;
+        bloomKeyPressed = true;
     }
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
     {
-        hdrKeyPressed = false;
+        bloomKeyPressed = false;
     }
 
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
