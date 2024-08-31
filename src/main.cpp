@@ -26,9 +26,15 @@ void processInput(GLFWwindow *window);
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
 
+void renderQuad();
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
+bool bloom = true;
+bool bloomKeyPressed = false;
+bool hdr = true;
+bool hdrKeyPressed = false;
+float exposure = 0.07f;
 
 // camera
 
@@ -84,30 +90,7 @@ struct ProgramState {
     ProgramState()
             : worldCamera(glm::vec3(4.0f, 4.0f, 2.0f), glm::vec3(0.0f, 1.0f, 0.0f), -135.0f, -35.0f),
               drivingCamera(glm::vec3(0.0f, 1.1f, -0.8f), glm::vec3(0.0f, 1.0f, 0.0f), 0.0f, 0.0f) {}
-
-
-    void SaveToFile(std::string filename);
-
-    void LoadFromFile(std::string filename);
 };
-
-void ProgramState::SaveToFile(std::string filename) {
-    std::ofstream out(filename);
-    out << clearColor.r << '\n'
-        << clearColor.g << '\n'
-        << clearColor.b << '\n'
-        << ImGuiEnabled << '\n';
-      }
-
-void ProgramState::LoadFromFile(std::string filename) {
-    std::ifstream in(filename);
-    if (in) {
-        in >> clearColor.r
-           >> clearColor.g
-           >> clearColor.b
-           >> ImGuiEnabled;
-    }
-}
 
 ProgramState *programState;
 
@@ -176,6 +159,7 @@ int main() {
     // -------------------------
     Shader ourShader("resources/shaders/2.model_lighting.vs", "resources/shaders/2.model_lighting.fs");
     Shader windshieldShader("resources/shaders/2.model_lighting.vs", "resources/shaders/windshieldShader.fs");
+    Shader hdrShader("resources/shaders/hdrShader.vs", "resources/shaders/hdrShader.fs");
 
     // load models
     // ---------
@@ -186,7 +170,44 @@ int main() {
     Model oshawott("resources/objects/oshawott/model.obj");
     oshawott.SetShaderTextureNamePrefix("material.");
 
+    // hdr stuff?
+    // -----------
+    unsigned int hdrFBO;
+    glGenFramebuffers(1, &hdrFBO);
+    // create floating point color buffer
+    unsigned int colorBuffers[2];
+    glGenTextures(2, colorBuffers);
+    for (unsigned int i = 0; i < 2; i++)
+    {
+        glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);  // we clamp to the edge as the blur filter would otherwise sample repeated texture values!
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        // attach texture to framebuffer
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorBuffers[i], 0);
+    }
+    // create depth buffer (renderbuffer)
+    unsigned int rboDepth;
+    glGenRenderbuffers(1, &rboDepth);
+    glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT);
+    // attach buffers
+    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorBuffers[0], 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+    // tell OpenGL which color attachments we'll use (of this framebuffer) for rendering
+    unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+    glDrawBuffers(2, attachments);
+    // finally check if framebuffer is complete
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cout << "Framebuffer not complete!" << std::endl;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+
+    // lighting info
+    // -------------
     Spotlight leftHeadlight, rightHeadlight;
     leftHeadlight.position = glm::vec3(0);
     leftHeadlight.direction = glm::vec3(0.0f, 0.0f, -1.0f);
@@ -227,8 +248,13 @@ int main() {
     tempSvetlo.linear = 0.0045f;
     tempSvetlo.quadratic = 0.00032f;
 
-    // pokemoni
+    // shader configuration
+    // --------------------
+    hdrShader.use();
+    hdrShader.setInt("hdrBuffer", 0);
 
+    // pokemoni
+    // --------
     int pokemonCount = 50;
     std::vector<glm::mat4> pokemoni;
     srand(static_cast<unsigned>(time(0)));
@@ -240,9 +266,6 @@ int main() {
         glm::mat4 pokemon = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, z));
         pokemoni.push_back(pokemon);
     }
-
-    // draw in wireframe
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // render loop
     // -----------
@@ -257,26 +280,26 @@ int main() {
         // -----
         processInput(window);
 
-
         // render
         // ------
         glClearColor(programState->clearColor.r, programState->clearColor.g, programState->clearColor.b, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // don't forget to enable shader before setting uniforms
-        ourShader.use();
+        // novo
+        glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         Camera& activeCamera = programState->isDrivingMode ? programState->drivingCamera : programState->worldCamera;
 
         // view/projection transformations
-        glm::mat4 projection = glm::perspective(glm::radians(activeCamera.Zoom),
-                                                (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.2f, 100.0f);
-
+        glm::mat4 projection = glm::perspective(glm::radians(activeCamera.Zoom), (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.2f, 100.0f);
         glm::mat4 view = activeCamera.GetViewMatrix();
 
-
+        ourShader.use();
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
 
+        // loading models
+        // --------------
         // wott
         glm::mat4 oshawottModel = glm::mat4(1.0f);
         ourShader.setMat4("model", oshawottModel);
@@ -555,11 +578,20 @@ int main() {
 
         glDisable(GL_BLEND);
 
+        // tone mapping vreme
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        hdrShader.use();
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, colorBuffers[0]);
+        hdrShader.setInt("hdr", hdr);
+        hdrShader.setFloat("exposure", exposure);
+        renderQuad();
+
+        std::cout << "hdr: " << (hdr ? "on" : "off") << "| exposure: " << exposure << std::endl;
 
         if (programState->ImGuiEnabled)
             DrawImGui(programState);
-
-
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -567,7 +599,6 @@ int main() {
         glfwPollEvents();
     }
 
-    programState->SaveToFile("resources/program_state.txt");
     delete programState;
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -576,6 +607,37 @@ int main() {
     // ------------------------------------------------------------------
     glfwTerminate();
     return 0;
+}
+
+// renderQuad() renders a 1x1 XY quad in NDC
+// -----------------------------------------
+unsigned int quadVAO = 0;
+unsigned int quadVBO;
+void renderQuad()
+{
+    if (quadVAO == 0)
+    {
+        float quadVertices[] = {
+                // positions        // texture Coords
+                -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+                -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+                1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+                1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+        };
+        // setup plane VAO
+        glGenVertexArrays(1, &quadVAO);
+        glGenBuffers(1, &quadVBO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    }
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
 }
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
@@ -632,6 +694,28 @@ void processInput(GLFWwindow *window) {
             programState->worldCamera.ProcessKeyboard(LEFT, deltaTime);
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
             programState->worldCamera.ProcessKeyboard(RIGHT, deltaTime);
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !hdrKeyPressed)
+    {
+        hdr = !hdr;
+        hdrKeyPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
+    {
+        hdrKeyPressed = false;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+    {
+        if (exposure > 0.0f)
+            exposure -= 0.001f;
+        else
+            exposure = 0.0f;
+    }
+    else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+    {
+        exposure += 0.001f;
     }
 }
 
