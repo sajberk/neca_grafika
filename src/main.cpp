@@ -30,7 +30,6 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 bool bloom = true;
 bool bloomKeyPressed = false;
-bool hdr = true; //todo: ovo je uvek true sad a, al pronadji kul vrednost za exposure
 float exposure = 0.07f;
 
 // camera
@@ -117,7 +116,6 @@ int main() {
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
     glfwSetKeyCallback(window, key_callback);
-    // tell GLFW to capture our mouse
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSwapInterval(1);
 
@@ -132,10 +130,10 @@ int main() {
     stbi_set_flip_vertically_on_load(false);
 
     programState = new ProgramState;
-    //programState->LoadFromFile("resources/program_state.txt");
     if (programState->ImGuiEnabled) {
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
+
     // Init Imgui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -175,7 +173,6 @@ int main() {
     glGenFramebuffers(1, &hdrFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
 
-    // Create two color buffers (one for normal rendering, other for bright colors)
     unsigned int colorBuffers[2];
     glGenTextures(2, colorBuffers);
     for (unsigned int i = 0; i < 2; i++) {
@@ -188,17 +185,14 @@ int main() {
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorBuffers[i], 0);
     }
 
-    // Create and attach a renderbuffer object for depth and stencil attachment (we won't be sampling these)
     unsigned int rboDepth;
     glGenRenderbuffers(1, &rboDepth);
     glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, SCR_WIDTH, SCR_HEIGHT);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
 
-    // Tell OpenGL which color attachments we'll use (of this framebuffer) for rendering
     unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
     glDrawBuffers(2, attachments);
-    // finally check if framebuffer is complete
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         std::cout << "Framebuffer not complete!" << std::endl;
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -335,16 +329,18 @@ int main() {
 
     float groundVertices[] = {
         // positions          // normals          // texture coordinates
-        -10.0f, 0.0f, -10.0f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-        10.0f, 0.0f, -10.0f,  0.0f, 1.0f, 0.0f,  10.0f, 0.0f,
-        10.0f, 0.0f,  10.0f,  0.0f, 1.0f, 0.0f,  10.0f, 10.0f,
+        -100.0f, 0.0f, -100.0f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
+        100.0f, 0.0f, -100.0f,  0.0f, 1.0f, 0.0f,  100.0f, 0.0f,
+        100.0f, 0.0f,  100.0f,  0.0f, 1.0f, 0.0f,  100.0f, 100.0f,
 
-        -10.0f, 0.0f, -10.0f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
-        10.0f, 0.0f,  10.0f,  0.0f, 1.0f, 0.0f,  10.0f, 10.0f,
-        -10.0f, 0.0f,  10.0f,  0.0f, 1.0f, 0.0f,  0.0f, 10.0f
+        -100.0f, 0.0f, -100.0f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
+        100.0f, 0.0f,  100.0f,  0.0f, 1.0f, 0.0f,  100.0f, 100.0f,
+        -100.0f, 0.0f,  100.0f,  0.0f, 1.0f, 0.0f,  0.0f, 100.0f
     };
 
     unsigned int groundTextureID = loadTexture("resources/textures/dirt/30.png");
+    unsigned int groundDiffuseTextureID = loadTexture("resources/textures/dirt/31.png");
+
     unsigned int groundVAO, groundVBO;
     glGenVertexArrays(1, &groundVAO);
     glGenBuffers(1, &groundVBO);
@@ -373,12 +369,12 @@ int main() {
 
     // pokemoni
     // --------
-    int pokemonCount = 50;
+    int pokemonCount = 1000;
     std::vector<glm::mat4> pokemoni;
     srand(static_cast<unsigned>(time(0)));
 
     for (int i = 0; i < pokemonCount; i++) {
-        float pokemonSpawnZone = 10.0f;
+        float pokemonSpawnZone = 50.0f;
         float x = -pokemonSpawnZone + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (2 * pokemonSpawnZone)));
         float z = -pokemonSpawnZone + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (2 * pokemonSpawnZone)));
         glm::mat4 pokemon = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, z));
@@ -433,14 +429,6 @@ int main() {
         ourShader.use();
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
-        ourShader.setMat4("model", glm::mat4(1.0f));
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, groundTextureID);
-        ourShader.setInt("texture1", 0);
-
-        glBindVertexArray(groundVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
 
 
         // loading models
@@ -491,9 +479,14 @@ int main() {
         leftHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(-5.0f, 7.0f, -15.0f, 1.0f));
         rightHeadlight.position = glm::vec3(truckModel * headlightModel * glm::vec4(5.0f, 7.0f, -15.0f, 1.0f));
 
-        //leftHeadlight.position = programState -> camera.Position;
-        leftHeadlight.direction = programState -> truckForward;
-        rightHeadlight.direction = programState -> truckForward;
+       // leftHeadlight.direction = programState -> truckForward;
+       // rightHeadlight.direction = programState -> truckForward;
+
+        glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), -0.3f, glm::vec3(1.0f, 0.0f, 0.0f));
+
+        leftHeadlight.direction = glm::normalize(glm::vec3(rotationMatrix * glm::vec4(programState->truckForward, 0.0f)));
+        rightHeadlight.direction = glm::normalize(glm::vec3(rotationMatrix * glm::vec4(programState->truckForward, 0.0f)));
+
 
         // sad ih i renderujemo
         float leftHeadlightVertices[] = {
@@ -577,11 +570,6 @@ int main() {
         headlightPhysical = glm::rotate(headlightPhysical, -truckRotOffsetX, glm::vec3(1, 0, 0));
         headlightPhysical = glm::scale(headlightPhysical, glm::vec3(10.0f));
         headlightPhysical = truckModel * headlightPhysical;
-//        leftHeadlightPhysical = glm::translate(leftHeadlightPhysical, glm::vec3(-5.0f, 7.0f, -15.0f));
-  //      leftHeadlightPhysical = glm::rotate(leftHeadlightPhysical, glm::radians(leftHeadlight.direction.x), glm::vec3(1.0f, 0.0f, 0.0f));
-    //    leftHeadlightPhysical = glm::rotate(leftHeadlightPhysical, glm::radians(leftHeadlight.direction.y), glm::vec3(0.0f, 1.0f, 0.0f));
-      //  leftHeadlightPhysical = glm::rotate(leftHeadlightPhysical, glm::radians(leftHeadlight.direction.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
 
         windshieldShader.use();
         windshieldShader.setMat4("projection", projection);
@@ -621,8 +609,6 @@ int main() {
         glDrawArrays(GL_TRIANGLE_STRIP, 16, 4);  // Top face
         glDrawArrays(GL_TRIANGLE_STRIP, 20, 4);  // Bottom face
 
-        //std::cout << leftHeadlight.position.x << " " << leftHeadlight.position.y << " " << leftHeadlight.position.z << std::endl;;
-        //std::cout << rightHeadlight.position.x << " " <<rightHeadlight.position.y << " " << rightHeadlight.position.z << std::endl<<std::endl;;
         ourShader.use();
         ourShader.setVec3("leftHeadlight.position", leftHeadlight.position);
         ourShader.setVec3("leftHeadlight.direction", leftHeadlight.direction);
@@ -659,7 +645,6 @@ int main() {
 
         ourShader.setFloat("material.shininess", 32.0f);
 
-        // nz gde planiram ovo da stavim ako izbacim zid jaoo
         glEnable(GL_CULL_FACE);
 
         // wall
@@ -672,6 +657,20 @@ int main() {
         wall.Draw(ourShader);
 
         glDisable(GL_CULL_FACE);
+
+        // ground
+        ourShader.setMat4("model", glm::mat4(1.0f));
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, groundTextureID);
+        ourShader.setInt("texture1", 0);
+
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, groundDiffuseTextureID);
+        ourShader.setInt("texture_diffuse1", 1);
+
+        glBindVertexArray(groundVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
 
         // sofersajbna
         std::vector<glm::vec3> windshieldVertices = {
@@ -701,7 +700,7 @@ int main() {
         windshieldModel = glm::scale(windshieldModel, glm::vec3(10.0f));
         windshieldModel = truckModel * windshieldModel;
 
-        // cam // boze nemam pojma zasto je ovo na ovom mestu al plasim se da pomeram bilo sta vise tkd todo:
+        // cam
         if (programState -> isDrivingMode)  {
             glm::mat4 steeringRotation = glm::rotate(glm::mat4(1.0f), programState->currentTruckSteer, glm::vec3(0, 1, 0));
             glm::vec3 targetPosition = programState->truckPosition + glm::vec3(steeringRotation * glm::vec4(0.0f, 1.1f, -0.8f, 1.0f));
