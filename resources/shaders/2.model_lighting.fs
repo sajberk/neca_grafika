@@ -45,6 +45,7 @@ uniform Spotlight rightHeadlight;
 uniform PointLight tempSvetlo;
 uniform Material material;
 uniform vec3 viewPosition;
+uniform bool moonlight;
 
 vec3 CalcSpotlight(Spotlight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
@@ -98,7 +99,10 @@ void main()
     vec3 normal = normalize(Normal);
     vec3 viewDir = normalize(viewPosition - FragPos);
     vec3 result = CalcSpotlight(leftHeadlight, normal, FragPos, viewDir) + CalcSpotlight(rightHeadlight, normal, FragPos, viewDir);
-    result += CalcPointLight(tempSvetlo, normal, FragPos, viewDir);
+    if (moonlight)
+    {
+        result += CalcPointLight(tempSvetlo, normal, FragPos, viewDir);
+    }
     FragColor = vec4(result, 1.0);
 
     float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));

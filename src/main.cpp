@@ -30,6 +30,8 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 bool bloom = true;
 bool bloomKeyPressed = false;
+bool moonlight = true;
+bool moonlightKeyPressed = false;
 float exposure = 0.07f;
 
 // camera
@@ -166,6 +168,8 @@ int main() {
     wall.SetShaderTextureNamePrefix("material.");
     Model oshawott("resources/objects/oshawott/model.obj");
     oshawott.SetShaderTextureNamePrefix("material.");
+    Model minion("resources/objects/Baby Minion/mc_baby.obj");
+    minion.SetShaderTextureNamePrefix("material.");
 
     // hdr stuff?
     // -----------
@@ -224,8 +228,8 @@ int main() {
     leftHeadlight.position = glm::vec3(0);
     leftHeadlight.direction = glm::vec3(0.0f, 0.0f, -1.0f);
 
-    leftHeadlight.ambient = glm::vec3(0.05f);
-    leftHeadlight.diffuse = glm::vec3(1.2f);
+    leftHeadlight.ambient = glm::vec3(0.0f);
+    leftHeadlight.diffuse = glm::vec3(1.0f);
     leftHeadlight.specular = glm::vec3(2.0f);
 
     leftHeadlight.constant = 1.0f;
@@ -238,8 +242,8 @@ int main() {
     rightHeadlight.position = glm::vec3(0);
     rightHeadlight.direction = glm::vec3(0.0f, 0.0f, -1.0f);
 
-    rightHeadlight.ambient = glm::vec3(0.05f);
-    rightHeadlight.diffuse = glm::vec3(1.2f);
+    rightHeadlight.ambient = glm::vec3(0.0f);
+    rightHeadlight.diffuse = glm::vec3(1.0f);
     rightHeadlight.specular = glm::vec3(2.0f);
 
     rightHeadlight.constant = 1.00f;
@@ -372,14 +376,18 @@ int main() {
     int pokemonCount = 1000;
     std::vector<glm::mat4> pokemoni;
     srand(static_cast<unsigned>(time(0)));
+    float pokemonSpawnZone = 50.0f;
 
     for (int i = 0; i < pokemonCount; i++) {
-        float pokemonSpawnZone = 50.0f;
         float x = -pokemonSpawnZone + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (2 * pokemonSpawnZone)));
         float z = -pokemonSpawnZone + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (2 * pokemonSpawnZone)));
         glm::mat4 pokemon = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, z));
         pokemoni.push_back(pokemon);
     }
+
+    // rare baby minion encounter
+    float minion_x = -pokemonSpawnZone + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (2 * pokemonSpawnZone)));
+    float minion_z = -pokemonSpawnZone + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (2 * pokemonSpawnZone)));
 
     // render loop
     // -----------
@@ -429,13 +437,14 @@ int main() {
         ourShader.use();
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
-
+        ourShader.setBool("moonlight", moonlight);
 
         // loading models
         // --------------
         // wott
         glm::mat4 oshawottModel = glm::mat4(1.0f);
         ourShader.setMat4("model", oshawottModel);
+        //oshawott.Draw(ourShader);
         oshawott.Draw(ourShader);
 
         // wottotachi
@@ -444,6 +453,10 @@ int main() {
             oshawott.Draw(ourShader);
         }
 
+        // minion
+        glm::mat4 binion = glm::translate(glm::mat4(1.0f), glm::vec3(minion_x, 0.0f, minion_z));
+        ourShader.setMat4("model", binion);
+        minion.Draw(ourShader);
 
         // truck
         glm::mat4 truckModel = glm::mat4(1.0f);
@@ -714,7 +727,7 @@ int main() {
         windshieldShader.setMat4("projection", projection);
         windshieldShader.setMat4("view", view);
         windshieldShader.setMat4("model", windshieldModel);
-        windshieldShader.setVec4("windshieldColor", glm::vec4(0.7f, 0.7f, 0.9f, 0.2f));
+        windshieldShader.setVec4("windshieldColor", glm::vec4(0.7f, 0.7f, 0.9f, 0.1f));
 
         glBindVertexArray(windshieldVAO);
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
@@ -869,6 +882,16 @@ void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
     {
         bloomKeyPressed = false;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS && !moonlightKeyPressed)
+    {
+        moonlight = !moonlight;
+        moonlightKeyPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_M) == GLFW_RELEASE)
+    {
+        moonlightKeyPressed = false;
     }
 
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
