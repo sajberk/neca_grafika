@@ -781,6 +781,20 @@ int main() {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+
+    // curenje memorije spreceno nadam se
+    glDeleteFramebuffers(1, &hdrFBO);
+    glDeleteRenderbuffers(1, &rboDepth);
+    glDeleteTextures(1, &cubemapTexture);
+    glDeleteTextures(1, &groundTextureID);
+    glDeleteTextures(1, &groundDiffuseTextureID);
+    glDeleteProgram(ourShader.ID);
+    glDeleteProgram(windshieldShader.ID);
+    glDeleteProgram(hdrShader.ID);
+    glDeleteProgram(blurShader.ID);
+    glDeleteProgram(bloomFinalShader.ID);
+    glDeleteProgram(skyboxShader.ID);
+
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
